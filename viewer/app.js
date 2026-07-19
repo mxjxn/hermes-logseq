@@ -1574,7 +1574,7 @@ function wireBlockInterstials() {
 }
 
 // ─── Pins (localStorage) ────────────────────────────────────
-const PINS_KEY = 'vwrr-pinned-pages';
+const PINS_KEY = 'logseq-pinned-pages';
 function getPins() {
   try { return JSON.parse(localStorage.getItem(PINS_KEY)) || []; } catch { return []; }
 }
