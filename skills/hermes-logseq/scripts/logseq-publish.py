@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""Write a page to the mxjxn-logseq-notes graph and push to GitHub.
+"""
+Write a page to a Logseq graph and push to GitHub.
 
 Usage:
-  python3 logseq-publish.py --title "2026-07-07 - Cryptoart Report" --tags "#farcaster #cryptoart" --content "Body content here..."
-  echo "content" | python3 logseq-publish.py --title "2026-07-07 - Job Search" --tags "#jobs"
+  python3 logseq-publish.py --title "2026-07-07 - Research Report" --tags "#topic" --content "Body content..."
+  echo "content" | python3 logseq-publish.py --title "2026-07-07 - Notes" --tags "#topic"
 
 The script:
 1. Pulls latest from GitHub (captures your desktop writes)
 2. Creates/overwrites the page in /pages/
 3. Commits and pushes
 
-Set LOGSEQ_NOTES_DIR env var to override default (/root/mxjxn-logseq-notes).
+Set LOGSEQ_NOTES_DIR env var to override default (~/my-logseq-graph).
 """
 
 import argparse
@@ -20,9 +21,9 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-NOTES_DIR = os.environ.get("LOGSEQ_NOTES_DIR", os.path.expanduser("~/mxjxn-logseq-notes"))
+NOTES_DIR = os.environ.get("LOGSEQ_NOTES_DIR", os.path.expanduser("~/my-logseq-graph"))
 PAGES_DIR = os.path.join(NOTES_DIR, "pages")
-COMMIT_AUTHOR = "Hermes Agent <hermes@mxjxn.com>"
+COMMIT_AUTHOR = "Hermes Agent <hermes@localhost>"
 
 
 def git(*args, check=True, capture=True):
