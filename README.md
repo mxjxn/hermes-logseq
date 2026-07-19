@@ -2,6 +2,31 @@
 
 Template repo for connecting a **Hermes Agent** to a **Logseq knowledge graph** — with a headless API server, auto-reindexing, a web viewer, and ready-made Hermes skills.
 
+## ⚠️ Status: Untested Alpha
+
+This is a direct port from a personal production setup. It works for one person (the maintainer) on one server. **It has not been tested as a reusable template.** Expect rough edges.
+
+- The installer (`setup.sh`) is written but untested end-to-end
+- The viewer was extracted from a production deployment — generalizations may have missed something
+- The skills contain opinions from one user's workflow — adapt to your own conventions
+- macOS support is theoretical — the inotify watcher needs real testing on Apple Silicon
+- Documentation describes *how things work*, not *how to set them up from scratch* (that's what the installer is for, once tested)
+
+**Feedback and PRs welcome.**
+
+### TODO
+
+- [ ] Test `setup.sh` end-to-end on a fresh Linux machine
+- [ ] Test `setup.sh` on macOS (Apple Silicon, Homebrew)
+- [ ] Verify macOS inotify-tools (fswatch compatibility) in the inotify watcher
+- [ ] Test skill installation path works with `install-github-skills`
+- [ ] Test viewer deployment with both Caddy and Nginx reverse proxies
+- [ ] Add CI: lint shell scripts (shellcheck), validate skill YAML frontmatter
+- [ ] Strip remaining personal opinions from skills where they're presented as universal rules
+- [ ] Update skill docs when logseqd property-support extension ships (properties will become queryable)
+- [ ] Add a `docker-compose.yml` for people who don't want to run Babashka directly
+- [ ] Document how to add the viewer's push notification endpoints to logseqd
+
 ## What You Get
 
 - **logseqd** — Headless Clojure Datalog API for your Logseq graph (query pages, blocks, tags)
