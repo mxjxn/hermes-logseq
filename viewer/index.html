@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="version" content="0.0.27">
+  <meta name="theme-color" content="#f5f5f7">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Notes Viewer">
+  <title>Notes Viewer</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="/icons/favicon-32.png">
+  <link rel="stylesheet" href="/style.css?v=0.0.27">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+<button class="menu-toggle" id="menu-toggle" aria-label="Menu">☰</button>
+<div id="app">
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      <h1 id="site-title">Knowledge Base</h1>
+      <span id="graph-stats" class="stats"></span>
+    </div>
+    <div class="search-box">
+      <input type="text" id="search-input" placeholder="Search graph…" autocomplete="off" tabindex="10">
+    </div>
+    <div class="sidebar-journal-btn">
+      <button id="btn-sidebar-journal">📓 Journal</button>
+    </div>
+    <nav id="page-list">
+      <div id="sidebar-nav">
+        <!-- Pinned section (generated) -->
+        <!-- Recent section (generated) -->
+        <!-- All pages section (generated) -->
+        <!-- Tags section (generated) -->
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <a href="https://github.com/mxjxn/hermes-logseq" target="_blank" rel="noopener" class="github-link" title="View source on GitHub">
+        <svg viewBox="0 0 16 16" width="20" height="20" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      </a>
+      <button class="sb-push-btn" id="sb-push-toggle" title="Push notifications">
+        🔔 <span class="sb-push-label">Notifications off</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main id="content">
+    <div id="page-view" class="page-view"></div>
+  </main>
+</div>
+
+<!-- Fixed bottom compose bar -->
+<div id="compose-bar">
+  <div class="compose-inner">
+    <div class="compose-top">
+      <div class="write-toggle">
+        <button class="write-pill active" data-mode="journal" id="pill-journal">Journal</button>
+        <button class="write-pill" data-mode="page" id="pill-page" disabled>Page</button>
+      </div>
+      <div class="type-selector">
+        <button class="type-pill active" data-block-type="note">📝 Note</button>
+        <button class="type-pill" data-block-type="event">📅 Event</button>
+        <button class="type-pill" data-block-type="ask">❓ Ask</button>
+      </div>
+    </div>
+    <div id="write-schema-fields"></div>
+    <div class="compose-bottom">
+      <input type="text" id="write-title" class="write-title-input" placeholder="Title or #tags (optional)…" autocomplete="off" tabindex="2">
+      <div class="compose-textarea-wrap">
+        <textarea id="journal-input" placeholder="Write something…" rows="1" tabindex="1"></textarea>
+        <button id="journal-submit" aria-label="Send">↑</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Context menu (custom, for pin/unpin) -->
+<div id="ctx-menu" class="ctx-menu hidden">
+  <button class="ctx-menu-item" id="ctx-pin" data-action="pin">📌 Pin page</button>
+  <button class="ctx-menu-item" id="ctx-unpin" data-action="unpin">📍 Unpin page</button>
+</div>
+
+<!-- Block context menu (indent/outdent/add) -->
+<div id="block-ctx-menu" class="ctx-menu hidden">
+  <button class="ctx-menu-item" id="blk-ctx-indent" data-action="indent">→ Indent</button>
+  <button class="ctx-menu-item" id="blk-ctx-outdent" data-action="outdent">← Outdent</button>
+  <button class="ctx-menu-item" id="blk-ctx-add" data-action="add">+ Add block below</button>
+</div>
+
+<!-- Toast container -->
+<div id="toast" class="toast hidden"></div>
+<script src="/app.js?v=0.0.27"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js');
+}
+</script>
+</body>
+</html>

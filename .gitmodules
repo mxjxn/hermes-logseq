@@ -1,0 +1,3 @@
+[submodule "logseqd"]
+	path = logseqd
+	url = https://github.com/mxjxn/logseqd.git

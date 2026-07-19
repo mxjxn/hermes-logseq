@@ -1,0 +1,15 @@
+# Clojure
+.cpcache/
+*.class
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+*~
+
+# Env
+.env
