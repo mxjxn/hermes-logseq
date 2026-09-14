@@ -38,6 +38,13 @@ async function apiPost(path, body) {
 // Renders Logseq block content with [[page refs]], #tags, `code`, **bold**
 function renderContent(text) {
   if (!text) return '';
+  // Split on literal newlines so multi-line block content renders correctly.
+  // Each line is rendered independently (preserving markdown in each line),
+  // then joined with <br>.
+  return text.split('\n').map(line => renderContentLine(line)).join('<br>');
+}
+
+function renderContentLine(text) {
   let html = escapeHtml(text);
 
   // Code blocks ```...``` (must come before inline code)
@@ -309,7 +316,7 @@ function renderBlocks(blocks, overridePageTitle) {
     // Try component rendering first
     const componentHtml = renderBlockComponent(b, children, blocks);
     if (componentHtml) {
-      return `<div class="block block-level-${level}" data-block-id="${escapeAttr(b['block/id']||'')}" data-page-title="${escapeAttr(pageTitle)}" id="blk-${(b['block/id']||'').replace(/[^a-zA-Z0-9-]/g,'_')}">${componentHtml}</div>`;
+      return `<div class="block block-level-${level}" data-block-id="${escapeAttr(b['block/id']||'')}" data-page-title="${escapeAttr(pageTitle)}" data-raw-content="${escapeAttr(content)}" id="blk-${(b['block/id']||'').replace(/[^a-zA-Z0-9-]/g,'_')}">${componentHtml}</div>`;
     }
 
     // Default text rendering
@@ -336,13 +343,14 @@ function renderBlocks(blocks, overridePageTitle) {
         const cTodo = c['block/todo'];
         if (cTodo) ch += `<span class="todo-${cTodo}">${cTodo} </span>`;
         ch += renderContent(c['block/content'] || '');
+        const cContent = c['block/content'] || '';
         const cLevel = c['block/level'] || (level + 1);
-        return `<div class="block block-level-${cLevel}" data-block-id="${escapeAttr(c['block/id']||'')}" data-page-title="${escapeAttr(pageTitle)}"><div class="block-content">${ch}</div></div>`;
+        return `<div class="block block-level-${cLevel}" data-block-id="${escapeAttr(c['block/id']||'')}" data-page-title="${escapeAttr(pageTitle)}" data-raw-content="${escapeAttr(cContent)}"><div class="block-content">${ch}</div></div>`;
       }).join('');
     }
 
     return `
-      <div class="block block-level-${level}" data-block-id="${escapeAttr(b['block/id']||'')}" data-page-title="${escapeAttr(pageTitle)}" id="blk-${(b['block/id']||'').replace(/[^a-zA-Z0-9-]/g,'_')}">
+      <div class="block block-level-${level}" data-block-id="${escapeAttr(b['block/id']||'')}" data-page-title="${escapeAttr(pageTitle)}" data-raw-content="${escapeAttr(content)}" id="blk-${(b['block/id']||'').replace(/[^a-zA-Z0-9-]/g,'_')}">
         <div class="block-content">${contentHtml}${childrenHtml}</div>
       </div>`;
   });
@@ -412,6 +420,7 @@ let composeIsJournal = false;
 
 // ─── Edit mode state ─────────────────────────────────────────
 let editingBlockId = null;
+let tapOutSaveSuppressed = false; // set by Cancel/×/Escape so focusout doesn't save
 let editingBlockEl = null;
 let ghostBlock = null;
 
@@ -436,21 +445,30 @@ function enterEditMode(blockEl) {
   const indicator = document.createElement('div');
   indicator.className = 'editing-indicator';
   indicator.innerHTML = '<span class="editing-label">editing</span><span class="edit-close">\u00d7</span>';
+  indicator.querySelector('.edit-close').addEventListener('pointerdown', () => { tapOutSaveSuppressed = true; });
   indicator.querySelector('.edit-close').addEventListener('click', (e) => {
     e.stopPropagation();
     exitEditMode();
   });
   blockEl.insertBefore(indicator, blockEl.firstChild);
 
-  // Pre-populate compose bar with block's text content
-  const contentEl = blockEl.querySelector('.block-content');
+  // Pre-populate compose bar with block's raw text content
+  // Use data-raw-content which preserves \n (the API stores literal newlines)
   const input = document.getElementById('journal-input');
-  if (input && contentEl) {
-    // Extract ONLY this block's own text — clone, strip child blocks, read text.
-    // Never touch the title field. Edit one block, nothing else.
-    const clone = contentEl.cloneNode(true);
-    clone.querySelectorAll('.block').forEach(el => el.remove());
-    input.value = clone.textContent.trim();
+  if (input) {
+    const rawContent = blockEl.dataset.rawContent;
+    if (rawContent !== undefined) {
+      // data-raw-content has HTML-escaped entities; decode them back
+      const tmp = document.createElement('textarea');
+      tmp.innerHTML = rawContent;
+      input.value = tmp.value;
+    } else {
+      // Fallback: read from rendered content (loses <br> but better than nothing)
+      const contentEl = blockEl.querySelector('.block-content');
+      const clone = contentEl.cloneNode(true);
+      clone.querySelectorAll('.block').forEach(el => el.remove());
+      input.value = clone.textContent.trim();
+    }
     input.focus();
     input.style.height = 'auto';
     input.style.height = input.scrollHeight + 'px';
@@ -467,6 +485,7 @@ function enterEditMode(blockEl) {
     cancelBtn.textContent = 'Cancel';
     cancelBtn.className = 'compose-cancel';
     btn.parentNode.insertBefore(cancelBtn, btn);
+    cancelBtn.addEventListener('pointerdown', () => { tapOutSaveSuppressed = true; });
     cancelBtn.addEventListener('click', () => exitEditMode());
   }
 }
@@ -515,7 +534,9 @@ document.addEventListener('dblclick', (e) => {
 // Escape key to cancel edit mode
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && editingBlockId) {
+    tapOutSaveSuppressed = true;
     exitEditMode();
+    setTimeout(() => { tapOutSaveSuppressed = false; }, 0);
   }
 });
 
@@ -694,8 +715,53 @@ function showBlockCtxMenu(blockEl, x, y) {
 
 function hideBlockCtxMenu() {
   const menu = document.getElementById('block-ctx-menu');
-  if (menu) menu.classList.add('hidden');
+  if (menu) {
+    menu.classList.add('hidden');
+    // Restore original menu contents if they were replaced by a sub-menu
+    if (!menu.querySelector('#blk-ctx-indent')) {
+      menu.innerHTML = `
+        <button class="ctx-menu-item" id="blk-ctx-edit" data-action="edit">✏️ Edit block</button>
+        <button class="ctx-menu-item" id="blk-ctx-indent" data-action="indent">→ Indent</button>
+        <button class="ctx-menu-item" id="blk-ctx-outdent" data-action="outdent">← Outdent</button>
+        <button class="ctx-menu-item" id="blk-ctx-add" data-action="add">+ Add block below</button>
+        <button class="ctx-menu-item ctx-menu-item-danger" id="blk-ctx-delete" data-action="delete">✕ Delete block</button>
+      `;
+      wireBlockCtxMenu();
+    }
+  }
   blockCtxTarget = null;
+}
+
+// Wire (or re-wire) the standard block context menu buttons.
+// Called once on init, and again whenever hideBlockCtxMenu restores the DOM
+// after a sub-menu (previously only delete was re-wired — indent/outdent/add
+// went dead after any delete-confirm).
+function wireBlockCtxMenu() {
+  const blkEdit = document.getElementById('blk-ctx-edit');
+  if (blkEdit) blkEdit.addEventListener('click', () => {
+    const target = blockCtxTarget; // hide nulls it — capture first
+    hideBlockCtxMenu();
+    if (target) enterEditMode(target);
+  });
+  const blkIndent = document.getElementById('blk-ctx-indent');
+  const blkOutdent = document.getElementById('blk-ctx-outdent');
+  const blkAdd = document.getElementById('blk-ctx-add');
+  if (blkIndent) blkIndent.addEventListener('click', () => {
+    if (blockCtxTarget) changeBlockLevel(blockCtxTarget, 1);
+    hideBlockCtxMenu();
+  });
+  if (blkOutdent) blkOutdent.addEventListener('click', () => {
+    if (blockCtxTarget) changeBlockLevel(blockCtxTarget, -1);
+    hideBlockCtxMenu();
+  });
+  if (blkAdd) blkAdd.addEventListener('click', () => {
+    if (blockCtxTarget) createGhostBlock(blockCtxTarget);
+    hideBlockCtxMenu();
+  });
+  const blkDelete = document.getElementById('blk-ctx-delete');
+  if (blkDelete) blkDelete.addEventListener('click', () => {
+    if (blockCtxTarget) deleteBlock(blockCtxTarget);
+  });
 }
 
 async function changeBlockLevel(blockEl, direction) {
@@ -720,6 +786,78 @@ async function changeBlockLevel(blockEl, direction) {
     }
   } catch (e) {
     showToast('Failed to change indent', null);
+  }
+}
+
+async function deleteBlock(blockEl) {
+  const blockId = blockEl.dataset.blockId;
+  if (!blockId) return;
+  const pageTitle = blockEl.dataset.pageTitle;
+  if (!pageTitle) return;
+
+  // Check for children in DOM — look for next siblings with deeper indent
+  const levelMatch = blockEl.className.match(/block-level-(\d+)/);
+  const blockLevel = parseInt(levelMatch ? levelMatch[1] : '0');
+  const hasChildren = blockEl.nextElementSibling &&
+    blockEl.nextElementSibling.classList.contains('block') &&
+    blockEl.nextElementSibling.dataset.blockId &&
+    blockEl.nextElementSibling.className.match(/block-level-(\d+)/) &&
+    parseInt(RegExp.$1) > blockLevel;
+
+  if (hasChildren) {
+    // Show sub-menu with three choices
+    showDeleteConfirmMenu(blockEl, blockId, pageTitle);
+  } else {
+    // No children — simple confirm
+    if (!confirm('Delete this block?')) return;
+    await doDeleteBlock(blockId, pageTitle, true);
+  }
+}
+
+function showDeleteConfirmMenu(blockEl, blockId, pageTitle) {
+  // Replace block context menu with delete-confirm sub-menu
+  const menu = document.getElementById('block-ctx-menu');
+  if (!menu) return;
+  menu.innerHTML = `
+    <button class="ctx-menu-item" id="blk-del-all" style="color:var(--text-dim)">🗑 Delete block + sub-blocks</button>
+    <button class="ctx-menu-item" id="blk-del-inherit" style="color:var(--text-dim)">↰ Delete block, keep sub-blocks</button>
+    <button class="ctx-menu-item" id="blk-del-cancel" style="color:var(--text-dim)">Cancel</button>
+  `;
+  menu.classList.remove('hidden');
+
+  // Position over the block (centered)
+  const rect = blockEl.getBoundingClientRect();
+  menu.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+  menu.style.top = Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - menu.offsetHeight - 8)) + 'px';
+
+  document.getElementById('blk-del-all').addEventListener('click', async () => {
+    hideBlockCtxMenu();
+    await doDeleteBlock(blockId, pageTitle, false);
+  });
+  document.getElementById('blk-del-inherit').addEventListener('click', async () => {
+    hideBlockCtxMenu();
+    await doDeleteBlock(blockId, pageTitle, true);
+  });
+  document.getElementById('blk-del-cancel').addEventListener('click', () => {
+    hideBlockCtxMenu();
+  });
+}
+
+async function doDeleteBlock(blockId, pageTitle, inheritChildren) {
+  try {
+    const ednBody = '{:block-id "' + escapeEdn(blockId) + '" :inherit-children ' + inheritChildren + '}';
+    const result = await apiPost('/delete-block', ednBody);
+    if (result.error) throw new Error(result.error);
+    showToast('Block deleted', 2000);
+  } catch (e) {
+    showToast('Failed to delete block', null);
+    return;
+  }
+  // Reload page separately so a render error doesn't mask the delete success
+  try {
+    await loadPage(pageTitle, { fromHash: true });
+  } catch (e) {
+    // Page reload failed — delete still worked, user can refresh manually
   }
 }
 
@@ -991,6 +1129,17 @@ function initComposeBar() {
       e.preventDefault();
       btn.click();
     }
+  });
+
+  // ── Tap-out saves: leaving the field while editing commits the edit ──
+  input.addEventListener('focusout', (e) => {
+    if (!editingBlockId || btn.disabled) return;
+    if (isSlashMenuOpen()) return; // picking a template isn't leaving
+    if (tapOutSaveSuppressed) { tapOutSaveSuppressed = false; return; }
+    const rt = e.relatedTarget;
+    if (rt && rt.closest && rt.closest('#compose-bar')) return; // ✓ / Cancel handle themselves
+    if (!input.value.trim()) { exitEditMode(); return; } // empty — just leave
+    btn.click(); // reuse the exact edit-save path
   });
   if (titleInput) {
     titleInput.addEventListener('keydown', (e) => {
@@ -1679,23 +1828,8 @@ function initCtxMenu() {
     }
   });
 
-  // Block context menu actions
-  const blkIndent = document.getElementById('blk-ctx-indent');
-  const blkOutdent = document.getElementById('blk-ctx-outdent');
-  const blkAdd = document.getElementById('blk-ctx-add');
-
-  if (blkIndent) blkIndent.addEventListener('click', () => {
-    if (blockCtxTarget) changeBlockLevel(blockCtxTarget, 1);
-    hideBlockCtxMenu();
-  });
-  if (blkOutdent) blkOutdent.addEventListener('click', () => {
-    if (blockCtxTarget) changeBlockLevel(blockCtxTarget, -1);
-    hideBlockCtxMenu();
-  });
-  if (blkAdd) blkAdd.addEventListener('click', () => {
-    if (blockCtxTarget) createGhostBlock(blockCtxTarget);
-    hideBlockCtxMenu();
-  });
+  // Block context menu actions (wiring lives in wireBlockCtxMenu)
+  wireBlockCtxMenu();
 }
 
 // ─── Sidebar rendering ───────────────────────────────────────
@@ -2275,3 +2409,145 @@ function scrollToBlock(blockId) {
     setTimeout(() => document.addEventListener('click', dismiss), 500);
   }
 }
+
+// ── New Page Wizard ──
+(function initNewPageWizard() {
+  const modal      = document.getElementById('new-page-modal');
+  const titleInput = document.getElementById('new-page-title');
+  const propsDiv   = document.getElementById('new-page-props');
+  const tmplSelect = document.getElementById('new-page-template');
+  const errorDiv   = document.getElementById('new-page-error');
+  const createBtn  = document.getElementById('new-page-create');
+  const cancelBtn  = document.getElementById('new-page-cancel');
+  const closeBtn   = document.getElementById('new-page-close');
+  const addPropBtn = document.getElementById('new-page-add-prop');
+  const overlay    = modal.querySelector('.modal-overlay');
+
+  function show() {
+    modal.classList.remove('hidden');
+    errorDiv.classList.add('hidden');
+    titleInput.value = '';
+    titleInput.focus();
+    // Clear dynamic properties
+    propsDiv.innerHTML = '';
+    // Fetch properties schema + templates in parallel
+    Promise.all([
+      fetch(API + '/properties-schema').then(r => r.json()).catch(() => ({properties: []})),
+      fetch(API + '/templates').then(r => r.json()).catch(() => ({templates: []}))
+    ]).then(([schemaData, tmplData]) => {
+      // Populate template dropdown
+      const currentTmpl = tmplSelect.value;
+      tmplSelect.innerHTML = '<option value="">— none —</option>';
+      for (const t of (tmplData.templates || [])) {
+        const opt = document.createElement('option');
+        opt.value = t.name;
+        opt.textContent = t.name + (t.page ? ` (${t.page})` : '');
+        tmplSelect.appendChild(opt);
+      }
+      if (currentTmpl) tmplSelect.value = currentTmpl;
+    });
+  }
+
+  function hide() {
+    modal.classList.add('hidden');
+    propsDiv.innerHTML = '';
+    titleInput.value = '';
+    errorDiv.classList.add('hidden');
+  }
+
+  function addPropRow(key = '', val = '') {
+    const row = document.createElement('div');
+    row.className = 'prop-row';
+    row.innerHTML = `
+      <input type="text" class="prop-key" placeholder="key" value="${escHtml(key)}">
+      <input type="text" class="prop-val" placeholder="value" value="${escHtml(val)}">
+      <button class="prop-remove" title="Remove">&times;</button>
+    `;
+    row.querySelector('.prop-remove').addEventListener('click', () => row.remove());
+    propsDiv.appendChild(row);
+    row.querySelector(key ? '.prop-val' : '.prop-key').focus();
+  }
+
+  function getProperties() {
+    const props = {};
+    for (const row of propsDiv.querySelectorAll('.prop-row')) {
+      const k = row.querySelector('.prop-key').value.trim();
+      const v = row.querySelector('.prop-val').value.trim();
+      if (k) props[k] = v;
+    }
+    return props;
+  }
+
+  async function createPage() {
+    const title = titleInput.value.trim();
+    if (!title) {
+      errorDiv.textContent = 'Title is required.';
+      errorDiv.classList.remove('hidden');
+      titleInput.focus();
+      return;
+    }
+    errorDiv.classList.add('hidden');
+    createBtn.disabled = true;
+    createBtn.textContent = 'Creating…';
+    try {
+      const properties = getProperties();
+      const template = tmplSelect.value || null;
+      // POST body as EDN
+      let body = '{:title "' + ednEscape(title) + '"';
+      if (Object.keys(properties).length > 0) {
+        body += ' :properties {';
+        for (const [k, v] of Object.entries(properties)) {
+          body += ' "' + ednEscape(k) + '" "' + ednEscape(v) + '"';
+        }
+        body += '}';
+      }
+      if (template) {
+        body += ' :template "' + ednEscape(template) + '"';
+      }
+      body += '}';
+
+      const resp = await fetch(API + '/create-page', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/edn' },
+        body: body
+      });
+      const data = await resp.json();
+      if (!resp.ok || data.error) {
+        errorDiv.textContent = data.error || 'Failed to create page.';
+        errorDiv.classList.remove('hidden');
+        createBtn.disabled = false;
+        createBtn.textContent = 'Create Page';
+        return;
+      }
+      // Success — close modal, navigate to new page
+      hide();
+      const pageUrl = '#/' + encodeURIComponent(data.title);
+      window.location.hash = pageUrl;
+      refreshSidebar();
+    } catch (e) {
+      errorDiv.textContent = 'Network error: ' + e.message;
+      errorDiv.classList.remove('hidden');
+    }
+    createBtn.disabled = false;
+    createBtn.textContent = 'Create Page';
+  }
+
+  function ednEscape(s) {
+    return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  }
+
+  // Wire events
+  document.getElementById('btn-new-page').addEventListener('click', show);
+  cancelBtn.addEventListener('click', hide);
+  closeBtn.addEventListener('click', hide);
+  overlay.addEventListener('click', hide);
+  addPropBtn.addEventListener('click', () => addPropRow());
+  createBtn.addEventListener('click', createPage);
+  titleInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') createPage();
+    if (e.key === 'Escape') hide();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) hide();
+  });
+})();

@@ -397,6 +397,16 @@ body {
 .ctx-menu-item.hidden {
   display: none;
 }
+.ctx-menu-item-danger {
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+  margin-top: 0.15rem;
+  padding-top: 0.5rem;
+}
+.ctx-menu-item-danger:hover {
+  background: #5c1a1a;
+  color: #f87171;
+}
 
 /* ─── Page View ───────────────────────────────────────────── */
 .page-view {
@@ -1510,3 +1520,131 @@ hr {
     padding: 0.5rem 0.7rem;
   }
 }
+
+/* ── New Page Wizard Modal ── */
+.modal.hidden { display: none; }
+.modal {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-overlay {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(2px);
+}
+.modal-content {
+  position: relative; z-index: 1;
+  background: var(--bg-main, #1a1b26);
+  border: 1px solid var(--border-color, #2a2b3d);
+  border-radius: 12px;
+  width: 90%; max-width: 440px;
+  max-height: 85vh; overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-color, #2a2b3d);
+}
+.modal-header h2 { margin: 0; font-size: 1.1rem; }
+.modal-close {
+  background: none; border: none; color: var(--text-faint, #6c6f85);
+  font-size: 1.4rem; cursor: pointer; padding: 0 0.25rem; line-height: 1;
+}
+.modal-close:hover { color: var(--text, #c0caf5); }
+.modal-body { padding: 1.25rem; }
+.modal-footer {
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--border-color, #2a2b3d);
+  display: flex; justify-content: flex-end; gap: 0.5rem;
+}
+
+/* Wizard fields */
+.wizard-field { margin-bottom: 1rem; }
+.wizard-field label {
+  display: block; font-size: 0.8rem; font-weight: 600;
+  color: var(--text-faint, #6c6f85); margin-bottom: 0.35rem;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.wizard-field .hint {
+  text-transform: none; font-weight: 400; letter-spacing: 0;
+  color: var(--text-dim, #4a4d60);
+}
+.wizard-field input[type="text"],
+.wizard-field select {
+  width: 100%; padding: 0.6rem 0.75rem;
+  background: var(--bg-secondary, #16161e);
+  border: 1px solid var(--border-color, #2a2b3d);
+  border-radius: 6px; color: var(--text, #c0caf5);
+  font-size: 0.9rem; font-family: inherit;
+  box-sizing: border-box;
+}
+.wizard-field input:focus,
+.wizard-field select:focus {
+  outline: none;
+  border-color: var(--accent, #7aa2f7);
+  box-shadow: 0 0 0 2px rgba(122,162,247,0.15);
+}
+.wizard-field select option { background: var(--bg-secondary, #16161e); }
+
+/* Property rows */
+.prop-row {
+  display: flex; gap: 0.4rem; margin-bottom: 0.4rem; align-items: center;
+}
+.prop-row input {
+  flex: 1; padding: 0.45rem 0.6rem;
+  background: var(--bg-secondary, #16161e);
+  border: 1px solid var(--border-color, #2a2b3d);
+  border-radius: 6px; color: var(--text, #c0caf5);
+  font-size: 0.85rem; font-family: inherit;
+}
+.prop-row input.prop-key { flex: 0.8; }
+.prop-row input.prop-val { flex: 1.2; }
+.prop-row input:focus {
+  outline: none;
+  border-color: var(--accent, #7aa2f7);
+}
+.prop-row .prop-remove {
+  background: none; border: none; color: var(--text-dim, #4a4d60);
+  cursor: pointer; font-size: 1.1rem; padding: 0 0.25rem;
+  flex-shrink: 0;
+}
+.prop-row .prop-remove:hover { color: var(--red, #f7768e); }
+.wizard-add-prop {
+  background: none; border: 1px dashed var(--border-color, #2a2b3d);
+  border-radius: 6px; color: var(--text-faint, #6c6f85);
+  padding: 0.35rem 0.6rem; font-size: 0.8rem;
+  cursor: pointer; font-family: inherit; width: 100%;
+  transition: all 0.15s;
+}
+.wizard-add-prop:hover {
+  border-color: var(--accent, #7aa2f7);
+  color: var(--accent, #7aa2f7);
+}
+
+/* Buttons */
+.btn-primary {
+  padding: 0.5rem 1.2rem; border-radius: 6px;
+  background: var(--accent, #7aa2f7); color: #1a1b26;
+  font-weight: 600; font-size: 0.9rem; border: none;
+  cursor: pointer; font-family: inherit;
+  transition: opacity 0.15s;
+}
+.btn-primary:hover { opacity: 0.85; }
+.btn-secondary {
+  padding: 0.5rem 1.2rem; border-radius: 6px;
+  background: transparent; color: var(--text-faint, #6c6f85);
+  font-weight: 500; font-size: 0.9rem;
+  border: 1px solid var(--border-color, #2a2b3d);
+  cursor: pointer; font-family: inherit;
+  transition: all 0.15s;
+}
+.btn-secondary:hover {
+  border-color: var(--text-faint, #6c6f85);
+  color: var(--text, #c0caf5);
+}
+.wizard-error {
+  background: rgba(247,118,142,0.1); color: var(--red, #f7768e);
+  border: 1px solid rgba(247,118,142,0.3); border-radius: 6px;
+  padding: 0.5rem 0.75rem; font-size: 0.85rem; margin-top: 0.5rem;
+}
+.wizard-error.hidden { display: none; }
