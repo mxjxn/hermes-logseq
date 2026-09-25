@@ -2866,9 +2866,13 @@ function runForceGraph(canvas, data) {
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
 
-  canvas.addEventListener('pointerdown', (e) => {
-    canvas.setPointerCapture(e.pointerId);
-    const { x, y } = localXY(e);
+  // ── multi-touch aware pointer handling (pinch to zoom, v0.0.37) ──
+  const activePtrs = new Map(); // pointerId -> {x, y}
+  let pinchPrev = null;         // {dist, mx, my} from previous pinch move
+
+  function ptrDist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+
+  function beginDragOrPan(x, y) {
     lastX = x; lastY = y; moved = 0;
     dragIdx = hit(x, y);
     panning = dragIdx === null;
@@ -2877,10 +2881,52 @@ function runForceGraph(canvas, data) {
       nodes[dragIdx].fx = w.x; nodes[dragIdx].fy = w.y;
       alpha = Math.max(alpha, 0.3);
     }
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    canvas.setPointerCapture(e.pointerId);
+    const { x, y } = localXY(e);
+    activePtrs.set(e.pointerId, { x, y });
+    if (activePtrs.size === 2) {
+      // second finger down -> pinch mode; cancel any drag/pan in progress
+      if (dragIdx !== null) { nodes[dragIdx].fx = null; nodes[dragIdx].fy = null; dragIdx = null; }
+      panning = false;
+      const pts = [...activePtrs.values()];
+      pinchPrev = {
+        dist: ptrDist(pts[0], pts[1]),
+        mx: (pts[0].x + pts[1].x) / 2,
+        my: (pts[0].y + pts[1].y) / 2
+      };
+      return;
+    }
+    if (activePtrs.size > 2) return; // ignore extra fingers
+    beginDragOrPan(x, y);
   });
 
   canvas.addEventListener('pointermove', (e) => {
     const { x, y } = localXY(e);
+    if (activePtrs.has(e.pointerId)) activePtrs.set(e.pointerId, { x, y });
+
+    // pinch: two pointers -> pan by midpoint delta, zoom by distance ratio
+    if (pinchPrev && activePtrs.size >= 2) {
+      const pts = [...activePtrs.values()];
+      const dist = ptrDist(pts[0], pts[1]);
+      const mx = (pts[0].x + pts[1].x) / 2;
+      const my = (pts[0].y + pts[1].y) / 2;
+      ox += mx - pinchPrev.mx;
+      oy += my - pinchPrev.my;
+      if (pinchPrev.dist > 0) {
+        const factor = dist / pinchPrev.dist;
+        const ns = Math.min(4, Math.max(0.15, scale * factor));
+        const k = ns / scale;
+        ox = mx - (mx - ox) * k;
+        oy = my - (my - oy) * k;
+        scale = ns;
+      }
+      pinchPrev = { dist: dist, mx: mx, my: my };
+      return;
+    }
+
     if (dragIdx !== null) {
       const w = toWorld(x, y);
       nodes[dragIdx].fx = w.x; nodes[dragIdx].fy = w.y;
@@ -2895,7 +2941,20 @@ function runForceGraph(canvas, data) {
     lastX = x; lastY = y;
   });
 
-  canvas.addEventListener('pointerup', (e) => {
+  function endPtr(e) {
+    activePtrs.delete(e.pointerId);
+    if (activePtrs.size < 2) pinchPrev = null;
+    if (activePtrs.size === 1) {
+      // one finger remains after a pinch -> it pans (suppress click)
+      const rem = [...activePtrs.values()][0];
+      lastX = rem.x; lastY = rem.y;
+      moved = 10;
+      dragIdx = null;
+      panning = true;
+      return;
+    }
+    if (activePtrs.size > 0) return;
+    // last pointer lifted -> click detection
     const { x, y } = localXY(e);
     if (dragIdx !== null) {
       if (moved < 6) {
@@ -2908,7 +2967,10 @@ function runForceGraph(canvas, data) {
       if (h !== null) loadPage(nodes[h].title);
     }
     dragIdx = null; panning = false;
-  });
+  }
+
+  canvas.addEventListener('pointerup', endPtr);
+  canvas.addEventListener('pointercancel', endPtr);
 
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
