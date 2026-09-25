@@ -1712,9 +1712,13 @@ hr {
 .chip:hover { border-color: var(--accent); color: var(--accent); }
 
 .chip.active {
-  background: var(--accent-dim);
+  background: var(--accent);
   border-color: var(--accent);
-  color: var(--accent);
+  color: #fff;
+}
+
+.chip.active .chip-n {
+  color: rgba(255, 255, 255, 0.75);
 }
 
 .chip-n {
@@ -1788,8 +1792,8 @@ hr {
 
 .tag-chip {
   border: none;
-  background: var(--accent-dim);
-  color: var(--accent);
+  background: var(--accent);
+  color: #fff;
   border-radius: 4px;
   padding: 1px 6px;
   font-size: 10.5px;
