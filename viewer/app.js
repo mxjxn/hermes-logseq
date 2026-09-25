@@ -2854,6 +2854,7 @@ function runForceGraph(canvas, data) {
   for (let t = 0; t < 450; t++) physics();
   fitView();
   fitted = true;
+  draw();  // initial paint — no interaction needed
 
   // coalesced redraw - only on interaction, never on a timer
   function requestDraw() {
