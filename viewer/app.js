@@ -2193,6 +2193,14 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('sidebar').classList.remove('open');
   });
 
+  document.getElementById('btn-sidebar-library').addEventListener('click', () => {
+    loadLibraryView();
+  });
+
+  document.getElementById('btn-sidebar-graph').addEventListener('click', () => {
+    loadGraphView();
+  });
+
   // Search with debounce
   let searchTimer;
   const searchInput = document.getElementById('search-input');
@@ -2207,7 +2215,11 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('popstate', (e) => {
     const route = hashRoute();
     if (!route) { loadDefaultPage(); return; }
-    if (route.type === 'tag') {
+    if (route.type === 'view') {
+      if (route.name === 'library') loadLibraryView();
+      else if (route.name === 'graph') loadGraphView();
+      else loadDefaultPage();
+    } else if (route.type === 'tag') {
       loadTagPage(route.name);
     } else {
       loadPage(route.name, {fromHash: true});
@@ -2224,7 +2236,11 @@ document.addEventListener('DOMContentLoaded', () => {
   if (route && !visited) {
     // First visit this tab with a hash — could be a shared deep link
     sessionStorage.setItem('notes-visited', '1');
-    if (route.type === 'tag') {
+    if (route.type === 'view') {
+      if (route.name === 'library') loadLibraryView();
+      else if (route.name === 'graph') loadGraphView();
+      else loadDefaultPage();
+    } else if (route.type === 'tag') {
       loadTagPage(route.name);
     } else {
       loadPage(route.name, {fromHash: true});
@@ -2369,6 +2385,9 @@ function hashRoute() {
   let raw = hash.replace(/^#\//, '').split('?')[0];
   if (raw.startsWith('tag/')) {
     return {type: 'tag', name: decodeURIComponent(raw.substring(4))};
+  }
+  if (raw.startsWith('view/')) {
+    return {type: 'view', name: decodeURIComponent(raw.substring(5))};
   }
   return {type: 'page', name: decodeURIComponent(raw)};
 }
@@ -2551,3 +2570,353 @@ function scrollToBlock(blockId) {
     if (e.key === 'Escape' && !modal.classList.contains('hidden')) hide();
   });
 })();
+
+// ═══ Library View ═════════════════════════════════════════════
+let libraryCache = null;
+let libFilterTag = null;
+let libSortMode = 'recent';
+
+function libBadTag(t) {
+  return !t || /["\\\n]/.test(t) || t.length > 28;
+}
+
+function setActiveSidebarView(view) {
+  document.querySelectorAll('.sb-page-link').forEach(a => a.classList.remove('active'));
+  const map = { journal: 'btn-sidebar-journal', library: 'btn-sidebar-library', graph: 'btn-sidebar-graph' };
+  Object.keys(map).forEach(k => {
+    const btn = document.getElementById(map[k]);
+    if (btn) btn.classList.toggle('active', k === view);
+  });
+}
+
+function libTopTags(pages) {
+  const freq = {};
+  pages.forEach(p => (p.tags || []).filter(t => !libBadTag(t)).forEach(t => { freq[t] = (freq[t] || 0) + 1; }));
+  return Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 14);
+}
+
+async function loadLibraryView() {
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="empty-state">Loading library…</div>';
+  currentPage = '__library__';
+  history.pushState({ page: '__library__' }, '', '#/view/library');
+  updateComposeContext(todayJournalPage(), true);
+  document.getElementById('sidebar').classList.remove('open');
+  try {
+    if (!libraryCache) libraryCache = await api('/library');
+    const pages = (libraryCache.pages || []).filter(p => p.title);
+    const topTags = libTopTags(pages);
+    content.innerHTML = `
+      <div class="page-header"><div class="page-title">Library</div>
+        <div class="lib-count">${pages.length} pages</div></div>
+      <div class="lib-toolbar">
+        <div class="lib-sort">
+          <button class="sort-pill ${libSortMode === 'recent' ? 'active' : ''}" data-sort="recent">Recent</button>
+          <button class="sort-pill ${libSortMode === 'alpha' ? 'active' : ''}" data-sort="alpha">A–Z</button>
+        </div>
+      </div>
+      <div class="lib-chips" id="lib-chips"></div>
+      <div class="lib-grid" id="lib-grid"></div>`;
+    renderLibChips(topTags);
+    renderLibGrid(pages);
+    content.querySelectorAll('.sort-pill').forEach(b => b.addEventListener('click', () => {
+      libSortMode = b.dataset.sort;
+      content.querySelectorAll('.sort-pill').forEach(x => x.classList.toggle('active', x === b));
+      renderLibGrid((libraryCache.pages || []).filter(p => p.title));
+    }));
+    setActiveSidebarView('library');
+  } catch (e) {
+    content.innerHTML = `<div class="empty-state"><h2>Couldn't load library</h2><p>${escapeHtml(e.message)}</p></div>`;
+  }
+}
+
+function renderLibChips(topTags) {
+  const chipsEl = document.getElementById('lib-chips');
+  if (!chipsEl) return;
+  let html = `<button class="chip ${!libFilterTag ? 'active' : ''}" data-tag="">All</button>`;
+  topTags.forEach(([t, n]) => {
+    html += `<button class="chip ${libFilterTag === t ? 'active' : ''}" data-tag="${escapeAttr(t)}">${escapeHtml(t)} <span class="chip-n">${n}</span></button>`;
+  });
+  chipsEl.innerHTML = html;
+  chipsEl.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+    libFilterTag = c.dataset.tag || null;
+    renderLibChips(topTags);
+    renderLibGrid((libraryCache.pages || []).filter(p => p.title));
+  }));
+}
+
+function renderLibGrid(pages) {
+  const grid = document.getElementById('lib-grid');
+  if (!grid) return;
+  let list = pages;
+  if (libFilterTag) list = list.filter(p => (p.tags || []).includes(libFilterTag));
+  list = list.slice().sort((a, b) => {
+    if (libSortMode === 'alpha') return a.title.localeCompare(b.title);
+    return (b.mtime || 0) - (a.mtime || 0);
+  });
+  grid.innerHTML = list.map(p => {
+    const tags = (p.tags || []).filter(t => !libBadTag(t)).slice(0, 3)
+      .map(t => `<button class="tag-chip" data-tag="${escapeAttr(t)}">${escapeHtml(t)}</button>`).join('');
+    const time = p.mtime ? relativeTime(p.mtime) : '';
+    return `<div class="lib-card" data-page="${escapeAttr(p.title)}">
+      <div class="lib-card-title">${escapeHtml(p.title)}</div>
+      ${p.snippet ? `<div class="lib-snippet">${escapeHtml(p.snippet)}</div>` : ''}
+      <div class="lib-card-meta">${tags ? `<span class="lib-tags">${tags}</span>` : ''}${time ? `<span class="lib-time">${time}</span>` : ''}</div>
+    </div>`;
+  }).join('') || '<div class="empty-state">No pages match this filter.</div>';
+  grid.querySelectorAll('.lib-card').forEach(c => c.addEventListener('click', (e) => {
+    if (e.target.closest('.tag-chip')) return;
+    loadPage(c.dataset.page);
+  }));
+  grid.querySelectorAll('.tag-chip').forEach(c => c.addEventListener('click', (e) => {
+    e.stopPropagation();
+    loadTagPage(c.dataset.tag);
+  }));
+}
+
+// ═══ Graph View ═══════════════════════════════════════════════
+async function loadGraphView() {
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="empty-state">Loading graph…</div>';
+  currentPage = '__graph__';
+  history.pushState({ page: '__graph__' }, '', '#/view/graph');
+  updateComposeContext(todayJournalPage(), true);
+  document.getElementById('sidebar').classList.remove('open');
+  try {
+    const data = await api('/graph');
+    if (!data.nodes || !data.nodes.length) {
+      content.innerHTML = '<div class="empty-state"><p>No connected pages yet — link pages with [[double brackets]] or #tags.</p></div>';
+      setActiveSidebarView('graph');
+      return;
+    }
+    content.innerHTML = `
+      <div class="page-header"><div class="page-title">Graph</div>
+        <div class="lib-count">${data.nodes.length} pages · ${data.edges.length} links</div></div>
+      <div class="graph-wrap"><canvas id="graph-canvas"></canvas>
+        <div class="graph-hint">drag: pan · scroll: zoom · drag node: pin · click node: open</div>
+      </div>`;
+    setActiveSidebarView('graph');
+    runForceGraph(document.getElementById('graph-canvas'), data);
+  } catch (e) {
+    content.innerHTML = `<div class="empty-state"><h2>Couldn't load graph</h2><p>${escapeHtml(e.message)}</p></div>`;
+  }
+}
+
+function runForceGraph(canvas, data) {
+  const ctx = canvas.getContext('2d');
+  const N_BG = '#0f1116', N_NODE = '#7c6ef0', N_HUB = '#b7adf7', N_HI = '#ffffff';
+  const E_DIM = 'rgba(124,110,240,0.10)', E_HI = 'rgba(183,173,247,0.55)';
+  const LABEL = 'rgba(224,224,230,0.85)';
+
+  const nodes = data.nodes.map((n, i) => ({
+    title: n.title, degree: n.degree,
+    x: Math.cos(i / data.nodes.length * Math.PI * 2) * (160 + i * 1.2),
+    y: Math.sin(i / data.nodes.length * Math.PI * 2) * (160 + i * 1.2),
+    vx: 0, vy: 0, fx: null, fy: null
+  }));
+  const idx = new Map(nodes.map((n, i) => [n.title, i]));
+  const adj = nodes.map(() => []);
+  data.edges.forEach(([a, b]) => {
+    const ia = idx.get(a), ib = idx.get(b);
+    if (ia !== undefined && ib !== undefined) { adj[ia].push(ib); adj[ib].push(ia); }
+  });
+
+  let scale = 1, ox = 0, oy = 0, alpha = 1;
+  let hoverIdx = null, dragIdx = null, panning = false, moved = 0;
+  let lastX = 0, lastY = 0, fitted = false;
+
+  function resize() {
+    const r = canvas.parentElement.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(r.width * dpr);
+    canvas.height = Math.round(r.height * dpr);
+    canvas.style.width = r.width + 'px';
+    canvas.style.height = r.height + 'px';
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  function physics() {
+    const N = nodes.length;
+    const REP = 2600, SPRING = 0.006, LEN = 95, GRAV = 0.04, DAMP = 0.85;
+    for (let i = 0; i < N; i++) {
+      const a = nodes[i];
+      for (let j = i + 1; j < N; j++) {
+        const b = nodes[j];
+        let dx = a.x - b.x, dy = a.y - b.y;
+        let d2 = dx * dx + dy * dy;
+        if (d2 < 1) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 1; }
+        const d = Math.sqrt(d2);
+        const f = REP / d2;
+        const fx = dx / d * f, fy = dy / d * f;
+        a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
+      }
+    }
+    for (let i = 0; i < N; i++) {
+      const a = nodes[i];
+      adj[i].forEach(j => {
+        const b = nodes[j];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+        const f = (d - LEN) * SPRING;
+        a.vx += dx / d * f; a.vy += dy / d * f;
+      });
+    }
+    for (const n of nodes) {
+      n.vx -= n.x * GRAV; n.vy -= n.y * GRAV;
+      if (n.fx !== null) { n.x = n.fx; n.y = n.fy; n.vx = 0; n.vy = 0; continue; }
+      n.vx *= DAMP; n.vy *= DAMP;
+      n.x += n.vx * alpha; n.y += n.vy * alpha;
+    }
+    alpha = Math.max(0, alpha - 0.004);
+  }
+
+  function fitView() {
+    const r = canvas.getBoundingClientRect();
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    nodes.forEach(n => {
+      minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x);
+      minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y);
+    });
+    const pad = 70;
+    const sx = (r.width - pad * 2) / Math.max(1, maxX - minX);
+    const sy = (r.height - pad * 2) / Math.max(1, maxY - minY);
+    scale = Math.min(sx, sy, 1.6);
+    ox = r.width / 2 - (minX + maxX) / 2 * scale;
+    oy = r.height / 2 - (minY + maxY) / 2 * scale;
+  }
+
+  function nodeRadius(n) { return 3 + Math.sqrt(n.degree) * 2.2; }
+  function toScreen(n) { return { x: n.x * scale + ox, y: n.y * scale + oy }; }
+  function toWorld(sx, sy) { return { x: (sx - ox) / scale, y: (sy - oy) / scale }; }
+
+  function hit(sx, sy) {
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const p = toScreen(nodes[i]);
+      const r = Math.max(8, nodeRadius(nodes[i]) * scale + 3);
+      const dx = p.x - sx, dy = p.y - sy;
+      if (dx * dx + dy * dy <= r * r) return i;
+    }
+    return null;
+  }
+
+  function draw() {
+    const r = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = N_BG;
+    ctx.fillRect(0, 0, r.width, r.height);
+
+    // edges
+    ctx.lineWidth = 1;
+    for (const [a, b] of data.edges) {
+      const ia = idx.get(a), ib = idx.get(b);
+      if (ia === undefined || ib === undefined) continue;
+      const hi = hoverIdx !== null && (ia === hoverIdx || ib === hoverIdx);
+      if (hoverIdx !== null && !hi) continue;
+      const pa = toScreen(nodes[ia]), pb = toScreen(nodes[ib]);
+      ctx.strokeStyle = hi ? E_HI : E_DIM;
+      ctx.beginPath();
+      ctx.moveTo(pa.x, pa.y);
+      ctx.lineTo(pb.x, pb.y);
+      ctx.stroke();
+    }
+
+    // neighbor set for dimming
+    let nbrs = null;
+    if (hoverIdx !== null) { nbrs = new Set([hoverIdx, ...adj[hoverIdx]]); }
+
+    // nodes
+    ctx.font = '11px "JetBrains Mono", monospace';
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      const p = toScreen(n);
+      if (p.x < -40 || p.y < -40 || p.x > r.width + 40 || p.y > r.height + 40) continue;
+      const rad = nodeRadius(n) * scale;
+      const dimmed = nbrs && !nbrs.has(i);
+      ctx.globalAlpha = dimmed ? 0.15 : 1;
+      ctx.fillStyle = i === hoverIdx ? N_HI : (n.degree >= 8 ? N_HUB : N_NODE);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, Math.max(2, rad), 0, Math.PI * 2);
+      ctx.fill();
+      const showLabel = i === hoverIdx || (n.degree >= 8 && scale > 0.55);
+      if (showLabel) {
+        ctx.globalAlpha = dimmed ? 0.15 : 1;
+        ctx.fillStyle = LABEL;
+        ctx.textAlign = 'center';
+        const t = n.title.length > 26 ? n.title.slice(0, 24) + '…' : n.title;
+        ctx.fillText(t, p.x, p.y - Math.max(6, rad + 5));
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  let ticks = 0;
+  function frame() {
+    if (alpha > 0 || dragIdx !== null) physics();
+    ticks++;
+    if (!fitted && (alpha < 0.35 || ticks > 400)) { fitView(); fitted = true; }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  frame();
+
+  function localXY(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    canvas.setPointerCapture(e.pointerId);
+    const { x, y } = localXY(e);
+    lastX = x; lastY = y; moved = 0;
+    dragIdx = hit(x, y);
+    panning = dragIdx === null;
+    if (dragIdx !== null) {
+      const w = toWorld(x, y);
+      nodes[dragIdx].fx = w.x; nodes[dragIdx].fy = w.y;
+      alpha = Math.max(alpha, 0.3);
+    }
+  });
+
+  canvas.addEventListener('pointermove', (e) => {
+    const { x, y } = localXY(e);
+    if (dragIdx !== null) {
+      const w = toWorld(x, y);
+      nodes[dragIdx].fx = w.x; nodes[dragIdx].fy = w.y;
+      moved += Math.abs(x - lastX) + Math.abs(y - lastY);
+    } else if (panning) {
+      ox += x - lastX; oy += y - lastY;
+      moved += Math.abs(x - lastX) + Math.abs(y - lastY);
+    } else {
+      const h = hit(x, y);
+      if (h !== hoverIdx) { hoverIdx = h; canvas.style.cursor = h !== null ? 'pointer' : 'grab'; }
+    }
+    lastX = x; lastY = y;
+  });
+
+  canvas.addEventListener('pointerup', (e) => {
+    const { x, y } = localXY(e);
+    if (dragIdx !== null) {
+      if (moved < 6) {
+        loadPage(nodes[dragIdx].title);
+      } else {
+        nodes[dragIdx].fx = null; nodes[dragIdx].fy = null; // release pin
+      }
+    } else if (panning && moved < 6) {
+      const h = hit(x, y);
+      if (h !== null) loadPage(nodes[h].title);
+    }
+    dragIdx = null; panning = false;
+  });
+
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const { x, y } = localXY(e);
+    const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    const ns = Math.min(4, Math.max(0.15, scale * factor));
+    ox = x - (x - ox) * (ns / scale);
+    oy = y - (y - oy) * (ns / scale);
+    scale = ns;
+  }, { passive: false });
+}
