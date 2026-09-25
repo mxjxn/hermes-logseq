@@ -2734,7 +2734,7 @@ function runForceGraph(canvas, data) {
     canvas.style.height = r.height + 'px';
   }
   resize();
-  window.addEventListener('resize', resize);
+  window.addEventListener('resize', () => { resize(); requestDraw(); });
 
   function physics() {
     const N = nodes.length;
@@ -2827,7 +2827,6 @@ function runForceGraph(canvas, data) {
     if (hoverIdx !== null) { nbrs = new Set([hoverIdx, ...adj[hoverIdx]]); }
 
     // nodes
-    ctx.font = '11px "JetBrains Mono", monospace';
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i];
       const p = toScreen(n);
@@ -2839,27 +2838,29 @@ function runForceGraph(canvas, data) {
       ctx.beginPath();
       ctx.arc(p.x, p.y, Math.max(2, rad), 0, Math.PI * 2);
       ctx.fill();
-      const showLabel = i === hoverIdx || (n.degree >= 8 && scale > 0.55);
-      if (showLabel) {
-        ctx.globalAlpha = dimmed ? 0.15 : 1;
-        ctx.fillStyle = LABEL;
-        ctx.textAlign = 'center';
-        const t = n.title.length > 26 ? n.title.slice(0, 24) + '…' : n.title;
-        ctx.fillText(t, p.x, p.y - Math.max(6, rad + 5));
-      }
+      // every node gets a label - hubs slightly larger
+      ctx.font = (n.degree >= 8 ? '12px' : '10.5px') + ' "JetBrains Mono", monospace';
+      ctx.globalAlpha = dimmed ? 0.15 : 0.9;
+      ctx.fillStyle = i === hoverIdx ? N_HI : LABEL;
+      ctx.textAlign = 'center';
+      const t = n.title.length > 26 ? n.title.slice(0, 24) + '…' : n.title;
+      ctx.fillText(t, p.x, p.y - Math.max(6, rad + 5));
     }
     ctx.globalAlpha = 1;
   }
 
-  let ticks = 0;
-  function frame() {
-    if (alpha > 0 || dragIdx !== null) physics();
-    ticks++;
-    if (!fitted && (alpha < 0.35 || ticks > 400)) { fitView(); fitted = true; }
-    draw();
-    requestAnimationFrame(frame);
+  // settle the layout headless BEFORE first paint, then render statically
+  // (no bounce animation - layout is instant and still)
+  for (let t = 0; t < 450; t++) physics();
+  fitView();
+  fitted = true;
+
+  // coalesced redraw - only on interaction, never on a timer
+  function requestDraw() {
+    if (requestDraw._queued) return;
+    requestDraw._queued = true;
+    requestAnimationFrame(() => { requestDraw._queued = false; draw(); });
   }
-  frame();
 
   function localXY(e) {
     const r = canvas.getBoundingClientRect();
@@ -2901,6 +2902,7 @@ function runForceGraph(canvas, data) {
     }
     if (activePtrs.size > 2) return; // ignore extra fingers
     beginDragOrPan(x, y);
+    requestDraw();
   });
 
   canvas.addEventListener('pointermove', (e) => {
@@ -2924,6 +2926,7 @@ function runForceGraph(canvas, data) {
         scale = ns;
       }
       pinchPrev = { dist: dist, mx: mx, my: my };
+      requestDraw();
       return;
     }
 
@@ -2939,6 +2942,7 @@ function runForceGraph(canvas, data) {
       if (h !== hoverIdx) { hoverIdx = h; canvas.style.cursor = h !== null ? 'pointer' : 'grab'; }
     }
     lastX = x; lastY = y;
+    requestDraw();
   });
 
   function endPtr(e) {
@@ -2967,6 +2971,7 @@ function runForceGraph(canvas, data) {
       if (h !== null) loadPage(nodes[h].title);
     }
     dragIdx = null; panning = false;
+    requestDraw();
   }
 
   canvas.addEventListener('pointerup', endPtr);
@@ -2980,5 +2985,6 @@ function runForceGraph(canvas, data) {
     ox = x - (x - ox) * (ns / scale);
     oy = y - (y - oy) * (ns / scale);
     scale = ns;
+    requestDraw();
   }, { passive: false });
 }
