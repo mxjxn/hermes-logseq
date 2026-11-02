@@ -10,7 +10,7 @@ Corresponds to the Phase 0 checklist in `DESKTOP_PLAN.md` (2026-10-30, ChatGPT r
 |---|---|
 | "GitHub writes returned HTTP 403" | Two commits landed on origin/main Oct 29–30 (`1ef12b0`, `c7ab30f`, pushed from the Mac). The 403 was the ChatGPT connector's limitation. Writes from the VPS work (git+ssh). |
 | "does not explicitly bind to loopback" | **Fixed** at the current pin: `core.clj` runs Jetty with `{:host "127.0.0.1" :port port}` (commit `d251b30` "Bind Jetty to loopback explicitly"). |
-| "Repository: mxjxn/hermes-logseq" | GitHub repo is still `mxjxn/Mnemosyne` (old URLs redirect). The Oct 29 "rename" commit changed README wording only. |
+| "Repository: mxjxn/hermes-logseq" | **Correct.** GitHub renamed the repo from Mnemosyne; `mxjxn/hermes-logseq` is canonical (confirmed by GitHub's moved-repo notice and direct `ls-remote` at push time, 2026-11-02). The Oct 29 commit only changed README wording; the rename itself happened on GitHub. VPS remote updated accordingly. |
 | inotify watcher semantics (Linux-only) | Confirmed. Bash + `inotifywait`, watches `pages/` + `journals/` only, `.md` only, 0.5s debounce, POSTs `/reindex-file`. No macOS equivalent exists in the project. |
 
 ## 2. Endpoint inventory
