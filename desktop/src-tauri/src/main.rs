@@ -28,6 +28,7 @@ use axum::{
     routing::any,
     Router,
 };
+use tauri::Manager;
 use tower_http::services::ServeDir;
 
 const SIDECAR_STARTUP_TIMEOUT: Duration = Duration::from_secs(120);
@@ -46,8 +47,9 @@ fn main() {
         .setup(|app| {
             let graph_dir = resolve_graph_dir();
             let sidecar_port = free_port().map_err(|e| format!("no free sidecar port: {e}"))?;
-            let java = java_path(app);
-            let jar = jar_path(app).to_string_lossy().into_owned();
+            let handle = app.handle();
+            let java = java_path(handle);
+            let jar = jar_path(handle).to_string_lossy().into_owned();
 
             eprintln!(
                 "[hermes-logseq] sidecar: {} -jar {} \"{}\" {}",
@@ -74,7 +76,7 @@ fn main() {
             eprintln!("[hermes-logseq] sidecar healthy on 127.0.0.1:{sidecar_port}");
 
             let app_port = free_port().map_err(|e| format!("no free app port: {e}"))?;
-            let viewer_dir = viewer_dir(app);
+            let viewer_dir = viewer_dir(handle);
             let state = AppState {
                 sidecar_port,
                 viewer_dir: viewer_dir.clone(),

@@ -54,10 +54,7 @@ LOGSEQ_GRAPH="$PWD/target/dev-graph" cargo tauri dev   # 2. run the shell
 
 ```bash
 cargo tauri icon src-tauri/icons/icon.png   # replace placeholder icon set
-JLINK=1 ./build-jar.sh
-mkdir -p src-tauri/resources
-cp target/logseq-datalog.jar src-tauri/resources/
-cp -R target/jrt src-tauri/resources/jrt
+JLINK=1 ./build-jar.sh                      # stages jar + jrt into src-tauri/resources/
 cargo tauri build
 ```
 

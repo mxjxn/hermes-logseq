@@ -90,4 +90,13 @@ if [[ "${JLINK:-0}" == "1" ]]; then
 fi
 
 du -h "$OUT/logseq-datalog.jar"
+echo "== stage into src-tauri/resources (tauri-build validates these at compile time) =="
+RES="$ROOT/desktop/src-tauri/resources"
+mkdir -p "$RES"
+cp "$OUT/logseq-datalog.jar" "$RES/"
+if [[ -d "$OUT/jrt" ]]; then
+  rm -rf "$RES/jrt"
+  cp -R "$OUT/jrt" "$RES/jrt"
+fi
+echo "   staged: $(ls "$RES")"
 echo "done."
