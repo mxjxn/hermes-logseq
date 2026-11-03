@@ -1,0 +1,26 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Hermes Logseq",
+  "version": "0.1.0",
+  "identifier": "com.mxjxn.hermes-logseq",
+  "build": {
+    "frontendDist": "../../viewer"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "resources": [
+      "resources/logseq-datalog.jar",
+      "resources/jrt"
+    ],
+    "icon": [
+      "icons/icon.png"
+    ]
+  }
+}
