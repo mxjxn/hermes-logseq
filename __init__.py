@@ -57,3 +57,24 @@ def register(ctx):
                 'content': {'type': 'string', 'description': 'Complete replacement text for this block.'},
                 'reason': {'type': 'string', 'description': 'Brief explanation of the change.'}},
             'required': ['reference', 'content'], 'additionalProperties': False}}, handler=propose)
+
+    async def recall(args, **kwargs):
+        # Selective knowledge retrieval (read-only). Bounded worker: returns a
+        # compact, cited evidence packet; rejected candidates appear only in
+        # the user-visible trace, never as exploratory tool noise.
+        try:
+            from .retrieval import recall as _recall
+            packet = _recall(args['query'], base_url=backend()._base_url(),
+                             source_limit=int(args.get('limit') or 8),
+                             char_budget=int(args.get('budget') or 4000))
+            return json.dumps(packet, ensure_ascii=False)
+        except Exception as error:
+            return json.dumps({'error': str(error)})
+
+    ctx.register_tool(name='logseq_recall', toolset='mnemosyne', is_async=True,
+        schema={'name': 'logseq_recall', 'description': 'Read-only retrieval from the user\'s Logseq knowledge graph. Returns a compact evidence packet: cited excerpts with page/file/line sources, backlinks, and a retrieval trace. Use when a question needs the user\'s notes/journals/research (past work, saved facts, document contents) — not for general knowledge. Selective: invoke for specific lookups, not every turn.', 'parameters': {
+            'type': 'object', 'properties': {
+                'query': {'type': 'string', 'description': 'Search phrase: terms, page title, journal date (YYYY_MM_DD), or question keywords.'},
+                'limit': {'type': 'integer', 'description': 'Max evidence entries (default 8).'},
+                'budget': {'type': 'integer', 'description': 'Max excerpt characters (default 4000).'}},
+            'required': ['query'], 'additionalProperties': False}}, handler=recall)

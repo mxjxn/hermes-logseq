@@ -167,3 +167,26 @@ Create a small Tauri proof of concept that launches `logseqd` against a disposab
 - How will graph switching and permissions scope retrieval to the active graph?
 
 **Suggested milestone:** Prototype a manually invoked isolated worker against a disposable graph; verify it returns a compact, sourced packet and that rejected results never reach the main context. Then test selective triggering. Only then assess a custom context engine.
+
+### Status update — v1 worker built and verified (2026-11-04)
+
+The suggested milestone above is implemented: `retrieval.py` (repo root) + `logseq_recall` plugin tool + `tests/test_retrieval.py` (11/11 passing against the disposable fixture on 8491). Files deployed to the installed plugin (`~/.hermes/plugins/hermes-logseq/`); the tool goes live at the next Hermes restart (deliberately not bounced mid-session).
+
+Verified against both the fixture graph and the live production daemon (read-only):
+- Packet contract works end-to-end: cited excerpts with page/file/block-line spans, backlink citations via `:block/refs` Datalog, per-page `related` (backlinked_by / links_to), user-visible trace (endpoints, candidates with kept/rejected, budget, warnings), static limitations list.
+- Deterministic ranking only; no LLM in the loop. The JSON shape leaves room for an LLM select/rerank pass behind the same contract.
+
+Backend facts learned (all read-verified, several not in the Phase 0 audit):
+1. `/search` is a raw `clojure.string/includes?` on the **whole q string** — multi-word queries only hit literal phrases. The worker issues one query per term and merges. (Also the source of ghost-page substring false positives, audit #9.)
+2. **Journals are excluded from `/search` entirely** (date-title regexes + `private::` filter). Journal content is still reachable: the worker queries journal blocks via Datalog (`:page/journal true` + `includes?`). A query like "journal morning" now returns the journal line with citation.
+3. `TODO`/`DOING` markers are **stripped from `:block/content`** and indexed separately as `:block/todo` — searching "todo" via `/search` fails; the worker queries `:block/todo` directly.
+4. `/query` takes the **bare Datalog map** (`{:find … :where …}`, optional `:args`) as EDN — not `{:query "..."}`. Page entity attrs: `:page/title`, `:page/file`, `:page/journal`, `:prop/private`; block attrs include `:block/refs` (populated, → page entities), `:block/todo`, `:block/uuid` (property-zone only — audit #7 confirmed), `:block/path-refs` (schema-present but **empty**, not populated).
+5. Privacy parity: `/search` excludes `private:: true` pages server-side; the worker's Datalog paths now apply the same `(not [?bp :prop/private "true"])` clause. **Gap flagged for the backlog: the privacy filter lives only in `/search`; `/page/<title>` and raw `/query` are unfiltered, so any future non-worker consumer must apply the filter itself.** Candidate server-side fix: enforce in `api.clj` handlers.
+6. Empty pages (properties but zero blocks) 404 on `/page/<title>` — handled as a warning, not a failure.
+
+Next steps on this track (in order):
+1. Trigger policy as behavior, not code: a small skill guiding when Hermes invokes `logseq_recall` (resume-of-documented-work, project-specific facts, graph-local questions) vs. not (general knowledge). Measure precision/recall from real sessions before considering cron/hook triggers.
+2. LLM select/rerank pass (optional, behind the packet contract): deterministic candidates → model picks/orders ≤ budget entries. Try glm-turbo first for cost.
+3. Token-budget realism check on the live graph: run recall queries for real work and tune `DEFAULT_CHAR_BUDGET` (currently 4000 chars ≈ 1k tokens).
+4. Server-side backlog from this work: private:: enforcement outside `/search`, inline-`id::` indexing (audit #7), and `/page/` returning empty pages as `200 []` instead of 404.
+5. Only then: selective auto-triggering experiments and the context-engine question (roadmap open decisions).

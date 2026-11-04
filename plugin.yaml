@@ -4,4 +4,5 @@ description: "Your Logseq graph inside Hermes Desktop: journal, notes, block edi
 author: mxjxn
 provides_tools:
   - mnemosyne_propose_edit
+  - logseq_recall
 provides_hooks: []
