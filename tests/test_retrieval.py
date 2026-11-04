@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from retrieval import STATIC_LIMITATIONS, RecallError, edn, recall  # noqa: E402
+from retrieval import DIRECTIVE, STATIC_LIMITATIONS, RecallError, edn, recall  # noqa: E402
 
 BASE_URL = os.environ.get("LOGSEQD_TEST_URL", "http://127.0.0.1:8491")
 
@@ -102,6 +102,12 @@ class TestRecall(unittest.TestCase):
     def test_limitations_declared(self):
         self.assertTrue(STATIC_LIMITATIONS)
         self.assertTrue(all(isinstance(x, str) for x in STATIC_LIMITATIONS))
+
+    def test_directive_rides_every_packet(self):
+        for q in ("Alpha", "todo", "zzz-no-match-xyz"):
+            packet = recall(q, base_url=BASE_URL)
+            self.assertEqual(packet.get("directive"), DIRECTIVE)
+            self.assertTrue(packet["directive"].strip())
 
 
 if __name__ == "__main__":

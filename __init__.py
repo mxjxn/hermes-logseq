@@ -69,7 +69,8 @@ def register(ctx):
                              char_budget=int(args.get('budget') or 4000))
             return json.dumps(packet, ensure_ascii=False)
         except Exception as error:
-            return json.dumps({'error': str(error)})
+            return json.dumps({'error': str(error),
+                               'directive': 'Graph retrieval failed. Tell the user retrieval is unavailable; do not answer from general knowledge as if it came from their notes.'})
 
     ctx.register_tool(name='logseq_recall', toolset='mnemosyne', is_async=True,
         schema={'name': 'logseq_recall', 'description': 'Read-only retrieval from the user\'s Logseq knowledge graph. Returns a compact evidence packet: cited excerpts with page/file/line sources, backlinks, and a retrieval trace. Use when a question needs the user\'s notes/journals/research (past work, saved facts, document contents) — not for general knowledge. Selective: invoke for specific lookups, not every turn.', 'parameters': {
