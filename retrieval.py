@@ -132,7 +132,12 @@ def recall(query, base_url="http://127.0.0.1:8471", source_limit=DEFAULT_SOURCE_
     query = (query or "").strip()
     if not query:
         raise RecallError("empty query")
-    terms = terms_of(query)
+    # The backend match is case-sensitive (clojure.string/includes?), so backend
+    # queries must carry the original casing too; the lowercase set drives
+    # scoring and content matching (both sides lowercased).
+    raw = [t for t in re.findall(r"[A-Za-z0-9_]{%d,}" % MIN_TERM_LEN, query)]
+    terms = {t.lower() for t in raw}
+    search_terms = sorted(set(raw) | terms)
     trace = {"endpoints": [], "candidates": [], "budget": {"cap_chars": char_budget}, "warnings": []}
 
     # 1. pages + search candidates -------------------------------------------
@@ -142,9 +147,9 @@ def recall(query, base_url="http://127.0.0.1:8471", source_limit=DEFAULT_SOURCE_
     if terms:
         # The backend /search is a raw substring match on the WHOLE q string
         # (clojure.string/includes?), so multi-word queries would only hit
-        # literal phrases — issue one query per term and merge instead.
+        # literal phrases — issue one query per case-variant term and merge.
         per_page_blocks = {}
-        for term in sorted(terms):
+        for term in search_terms:
             try:
                 sres = _get(base_url, "/search?q=" + urllib.parse.quote(term))
                 trace["endpoints"].append("GET /search?q=%s (%d pages)" % (term, sres.get("pages", 0)))
@@ -152,7 +157,10 @@ def recall(query, base_url="http://127.0.0.1:8471", source_limit=DEFAULT_SOURCE_
                 trace["warnings"].append("search '%s' failed: %s" % (term, exc))
                 continue
             for r in sres.get("results", []):
-                per_page_blocks.setdefault(r["page"], []).extend(r.get("blocks", []))
+                bucket = per_page_blocks.setdefault(r["page"], [])
+                for blk in r.get("blocks", []):
+                    if blk not in bucket:
+                        bucket.append(blk)  # case-variant queries overlap; dedupe
         search_hits = per_page_blocks
     else:
         trace["warnings"].append("no usable terms (all tokens < %d chars); search skipped" % MIN_TERM_LEN)
@@ -181,7 +189,7 @@ def recall(query, base_url="http://127.0.0.1:8471", source_limit=DEFAULT_SOURCE_
     # Journals are excluded from /search server-side (date-title regexes +
     # private:: filter), and TODO markers are stripped from block content
     # (indexed in :block/todo). Reach both directly.
-    for tok in sorted(terms | {query.lower()}):
+    for tok in sorted(set(search_terms) | {query.lower()}):
         if re.fullmatch(r"\d{4}[_-]\d{2}[_-]\d{2}.*", tok):
             if not any(m[2]["title"] == tok for m in ranked):
                 ranked.append((80, ["journal date match"],
@@ -209,7 +217,7 @@ def recall(query, base_url="http://127.0.0.1:8471", source_limit=DEFAULT_SOURCE_
     if terms:
         try:
             journal_rows = []
-            for term in sorted(terms):
+            for term in search_terms:
                 clause = "(clojure.string/includes? ?c %s)" % edn(term)
                 qres = _query(base_url, ["?t", "?c"],
                               [["?b", ":block/content", "?c"],
@@ -218,7 +226,11 @@ def recall(query, base_url="http://127.0.0.1:8471", source_limit=DEFAULT_SOURCE_
                                ["?bp", ":page/title", "?t"],
                                '(not [?bp :prop/private "true"])'])
                 journal_rows += [{"page": r[0], "content": r[1]} for r in qres.get("results", [])]
-            trace["endpoints"].append("QUERY journal-blocks (%d terms) -> %d" % (len(terms), len(journal_rows)))
+            seen_j = set()
+            journal_rows = [r for r in journal_rows
+                            if (r["page"], r["content"]) not in seen_j
+                            and not seen_j.add((r["page"], r["content"]))]
+            trace["endpoints"].append("QUERY journal-blocks (%d terms) -> %d" % (len(search_terms), len(journal_rows)))
         except Exception as exc:
             trace["warnings"].append("journal-content query failed: %s" % exc)
             journal_rows = []

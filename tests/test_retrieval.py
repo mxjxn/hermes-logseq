@@ -91,6 +91,14 @@ class TestRecall(unittest.TestCase):
         limited = recall("Alpha", base_url=BASE_URL, source_limit=2)
         self.assertLessEqual(len(limited["packet"]), 2)
 
+    def test_case_variant_search_hits_capitalized_content(self):
+        # Regression: backend /search is case-sensitive; the worker must query
+        # original casing. Fixture content is "Alpha intro block..." (capital A).
+        packet = recall("Alpha", base_url=BASE_URL)
+        self.assertTrue(any(any(r.startswith("search:") for r in e["reasons"])
+                            for e in packet["packet"]),
+                        "no search hits — case-variant querying regressed")
+
     def test_trace_is_user_visible_and_bounded(self):
         packet = recall("Alpha", base_url=BASE_URL)
         tr = packet["trace"]
