@@ -350,6 +350,51 @@ function renderBlocks(blocks, overridePageTitle) {
 }
 
 // ─── Page rendering ──────────────────────────────────────────
+// ─── Download page as Markdown ─────────────────────────────────
+function pageToMarkdown(data, title) {
+  const blocks = ((data && data.blocks) || []).slice()
+    .sort((a, b) => (a['block/line'] || 0) - (b['block/line'] || 0));
+  const lines = ['title:: ' + title];
+  const props = (data && data.page && data.page.properties) || {};
+  for (const [k, v] of Object.entries(props)) {
+    if (k !== 'title') lines.push(k + ':: ' + String(v));
+  }
+  lines.push('');
+  for (const b of blocks) {
+    const level = Math.max(0, parseInt(b['block/level'], 10) || 0);
+    const indent = '\t'.repeat(level);
+    const content = String(b['block/content'] || '').replace(/\n/g, '\n' + indent + '\t');
+    lines.push(indent + '- ' + content);
+  }
+  return lines.join('\n') + '\n';
+}
+
+async function downloadPageMarkdown() {
+  if (!currentPage) return;
+  try {
+    const data = await api('/page/' + encodeURIComponent(currentPage));
+    const md = pageToMarkdown(data, currentPage);
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = currentPage.replace(/[\\/:*?"<>|]/g, '-') + '.md';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast('Markdown downloaded', null);
+  } catch (err) {
+    showToast('Download failed', null);
+  }
+}
+
+document.addEventListener('click', (e) => {
+  if (e.target && e.target.closest && e.target.closest('#page-dl-btn')) {
+    downloadPageMarkdown();
+  }
+});
+
 function renderPage(data) {
   const rawTitle = data.title || data['page/title'] || 'Untitled';
   const blocks = data.blocks || [];
@@ -393,7 +438,10 @@ function renderPage(data) {
 
   return `
     <div class="page-header">
-      <div class="page-title">${escapeHtml(title)}</div>
+      <div class="page-title-row">
+        <div class="page-title">${escapeHtml(title)}</div>
+        <button type="button" class="page-dl-btn" id="page-dl-btn" title="Download this page as Markdown">Download .md</button>
+      </div>
       ${tagHtml}
       ${propHtml}
     </div>
