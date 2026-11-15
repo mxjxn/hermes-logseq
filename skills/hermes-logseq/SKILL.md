@@ -60,8 +60,8 @@ cd hermes-logseq
 ```
 
 Use the repository's [manual deployment guide](https://github.com/mxjxn/hermes-logseq/blob/main/docs/deployment.md)
-for the current Clojure entry point and reverse-proxy setup. `setup.sh` is a
-legacy installer whose launch/copy paths do not match the current tree.
+for the current Clojure entry point and reverse-proxy setup (the legacy
+`setup.sh` installer was removed in v0.2.1).
 The included watcher uses Linux `inotifywait`; native macOS watching is not implemented.
 
 ## Logseq Block Format

@@ -61,7 +61,8 @@ echo "== smoke test (disposable graph, random port) =="
 SMOKE_DIR="$OUT/smoke-graph"
 rm -rf "$SMOKE_DIR"; mkdir -p "$SMOKE_DIR/pages" "$SMOKE_DIR/journals"
 printf -- '- smoke test page\n- links [[Beta]]\n' > "$SMOKE_DIR/pages/Alpha.md"
-SMOKE_PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
+SMOKE_PORT=$(( (RANDOM % 20000) + 20000 ))
+while curl -s -o /dev/null -m 1 "http://127.0.0.1:$SMOKE_PORT/health"; do SMOKE_PORT=$(( (RANDOM % 20000) + 20000 )); done
 java -jar "$OUT/logseq-datalog.jar" "$SMOKE_DIR" "$SMOKE_PORT" > "$OUT/smoke.log" 2>&1 &
 SMOKE_PID=$!
 for i in $(seq 1 60); do

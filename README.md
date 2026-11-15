@@ -70,8 +70,8 @@ it does not provide a complete automatic commit/push service for every install.
 Clone the repository with its pinned backend:
 
 ```sh
-git clone --recurse-submodules https://github.com/mxjxn/Mnemosyne.git
-cd Mnemosyne
+git clone --recurse-submodules https://github.com/mxjxn/hermes-logseq.git
+cd hermes-logseq
 ```
 
 Choose the part you want to use:
@@ -82,10 +82,6 @@ Choose the part you want to use:
 - **Setting up the web editor or public reader?** Use the [manual deployment guide](docs/deployment.md).
   It covers the Clojure backend, `/api` routing, file watching, and publishing.
 - **Developing the integration?** Start with the [test guide](tests/README.md).
-
-`setup.sh` is a legacy installer and is **not the recommended setup path**. Its
-backend launch command and some copied paths do not match the current tree.
-The manual guide uses the checked-in Clojure entry point.
 
 ## Files and compatibility
 

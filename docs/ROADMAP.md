@@ -17,7 +17,7 @@ Repository: `mxjxn/hermes-logseq`, default branch `main`.
 - The current daemon is configured for a single graph at startup. Restart-on-switch is the initial proposal, pending validation.
 - The existing Linux watcher uses `inotify-tools`; there is no native macOS watcher checked into the project. Direct API writes reindex affected files.
 - The raw daemon API does not implement the private editor's authentication layer; do not expose it to the network by default.
-- Existing `setup.sh` is described as legacy and should not be treated as a working installer.
+- The legacy `setup.sh` installer was removed in v0.2.1; the manual deployment guide is the setup path.
 
 ## First release scope
 

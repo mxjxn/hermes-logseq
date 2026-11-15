@@ -52,7 +52,7 @@ Install the package into the Hermes profile that owns the graph. After this
 change is merged to `main`, the standard installation is:
 
 ```sh
-hermes plugins install mxjxn/Mnemosyne --no-enable
+hermes plugins install mxjxn/hermes-logseq --no-enable
 hermes plugins enable hermes-logseq
 hermes gateway restart
 ```
@@ -90,7 +90,7 @@ remains the review surface when that Desktop extension is unavailable. Older bui
 message rather than trying an unsafe fallback.
 
 In **Capabilities → Plugins → Install from Git**, install
-`mxjxn/Mnemosyne` with the **Desktop** component selected, then enable
+`mxjxn/hermes-logseq` with the **Desktop** component selected, then enable
 **Logseq Notes**. Alternatively, from a checkout containing this revision:
 
 ```sh

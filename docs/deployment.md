@@ -3,8 +3,7 @@
 This guide describes the current files and entry points. It is a manual setup
 reference, not a claim that installation has been validated on a fresh machine.
 The maintainer's working deployment includes additional service and Git-sync
-configuration. The root `setup.sh` still targets an older layout; do not rely on
-it as a current one-command installer.
+configuration. Follow this guide's steps; there is no one-command installer.
 
 ## Components and prerequisites
 
